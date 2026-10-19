@@ -1,0 +1,20 @@
+{
+  "name": "Controle de Estoque",
+  "short_name": "Estoque",
+  "description": "Cadastro de produtos, entradas, saídas e consulta de estoque.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f1f5f9",
+  "theme_color": "#0f766e",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
