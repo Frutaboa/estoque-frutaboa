@@ -4,10 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0f766e">
-<link rel="manifest" href="manifest.json">
-<link rel="icon" href="icon.svg" type="image/svg+xml">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
 <title>Controle de Estoque</title>
 <style>
   :root{
@@ -81,27 +81,49 @@
   .badge.baixo{background:#fef3c7; color:#92400e}
   .badge.zero{background:#fee2e2; color:#991b1b}
 
-  /* Histórico */
+  /* Histórico (modal do produto) */
   .hist-item{display:flex; gap:10px; align-items:center; padding:9px 0; border-bottom:1px solid var(--border)}
   .hist-item:last-child{border-bottom:0}
   .tag{font-size:11px; font-weight:700; padding:4px 8px; border-radius:999px; white-space:nowrap}
   .tag.entrada{background:#d1fae5; color:#065f46}
   .tag.saida{background:#fee2e2; color:#991b1b}
 
-  /* Navegação inferior */
+  /* ===== Nova tela de Histórico ===== */
+  .segmented{display:flex; gap:6px; margin-bottom:12px; background:#e2e8f0; padding:4px; border-radius:12px}
+  .seg-btn{flex:1; padding:11px 8px; border:0; border-radius:9px; background:transparent;
+           font-weight:600; font-size:14px; color:var(--muted); font-family:inherit;
+           cursor:pointer; transition:.15s}
+  .seg-btn.active{background:#fff; color:var(--primary); box-shadow:0 1px 3px rgba(0,0,0,.08)}
+
+  .hist-head{font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase;
+             letter-spacing:.5px; margin:14px 4px 6px}
+  .hist-head:first-child{margin-top:0}
+
+  .hist-card{background:#fff; border:1px solid var(--border); border-radius:12px;
+             padding:11px 13px; margin-bottom:8px}
+  .hist-card .row{display:flex; justify-content:space-between; align-items:center; gap:10px}
+  .hist-card .nome{font-weight:600; font-size:15px; overflow:hidden; text-overflow:ellipsis;
+                   white-space:nowrap; flex:1; min-width:0}
+  .hist-card .qtd{font-weight:700; font-size:16px; white-space:nowrap}
+  .hist-card .qtd.entrada{color:#065f46}
+  .hist-card .qtd.saida{color:#991b1b}
+  .hist-card .meta{font-size:12px; color:var(--muted); margin-top:3px}
+  .hist-card .obs{font-size:12px; color:var(--muted); margin-top:2px}
+
+  /* Navegação inferior (agora com 5 abas) */
   nav{
     position:fixed; left:0; right:0; bottom:0; z-index:30;
-    display:grid; grid-template-columns:repeat(4,1fr);
+    display:grid; grid-template-columns:repeat(5,1fr);
     background:#fff; border-top:1px solid var(--border);
     padding-bottom:env(safe-area-inset-bottom);
     box-shadow:0 -2px 12px rgba(15,23,42,.06);
   }
   nav button{
-    background:none; border:0; padding:9px 4px 8px; display:flex; flex-direction:column;
-    align-items:center; gap:2px; font-size:11px; font-weight:600; color:var(--muted);
+    background:none; border:0; padding:8px 2px 7px; display:flex; flex-direction:column;
+    align-items:center; gap:2px; font-size:10px; font-weight:600; color:var(--muted);
     font-family:inherit; cursor:pointer;
   }
-  nav button .ico{font-size:20px; line-height:1}
+  nav button .ico{font-size:19px; line-height:1}
   nav button.active{color:var(--primary)}
 
   /* Modal */
@@ -215,6 +237,27 @@
     </div>
   </section>
 
+  <!-- ============ HISTÓRICO ============ -->
+  <section id="view-historico" class="view">
+    <div class="segmented">
+      <button class="seg-btn active" data-tipo="entrada" type="button">⬇️ Entradas</button>
+      <button class="seg-btn" data-tipo="saida" type="button">⬆️ Saídas</button>
+    </div>
+
+    <div class="card" style="padding:10px">
+      <select id="filtro-produto-hist">
+        <option value="">Todos os produtos</option>
+      </select>
+    </div>
+
+    <div class="resumo">
+      <div><b id="hist-total">0</b><span>Fardos no período</span></div>
+      <div><b id="hist-count">0</b><span>Movimentações</span></div>
+    </div>
+
+    <div id="lista-hist"></div>
+  </section>
+
 </main>
 
 <!-- ============ NAVEGAÇÃO ============ -->
@@ -222,6 +265,7 @@
   <button data-view="estoque" class="active"><span class="ico">📋</span>Estoque</button>
   <button data-view="entrada"><span class="ico">⬇️</span>Entrada</button>
   <button data-view="saida"><span class="ico">⬆️</span>Saída</button>
+  <button data-view="historico"><span class="ico">📅</span>Histórico</button>
   <button data-view="cadastro"><span class="ico">➕</span>Produto</button>
 </nav>
 
@@ -276,6 +320,7 @@ function mostrarView(nome){
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.view === nome));
   if(nome === 'estoque') renderEstoque();
   if(nome === 'entrada' || nome === 'saida'){ renderSelects(); atualizarDispSaida(); }
+  if(nome === 'historico') renderHistorico();
   window.scrollTo(0,0);
 }
 document.querySelectorAll('nav button').forEach(b =>
@@ -405,6 +450,89 @@ function renderEstoque(){
 
 document.getElementById('busca-estoque').addEventListener('input', renderEstoque);
 
+/* ================= HISTÓRICO (nova tela) ================= */
+let histTipo = 'entrada';
+
+function rotuloDia(dateStr){
+  const d = new Date(dateStr);
+  const hoje = new Date();
+  const ontem = new Date(); ontem.setDate(ontem.getDate() - 1);
+  const dStr = d.toLocaleDateString('pt-BR');
+  if(dStr === hoje.toLocaleDateString('pt-BR')) return 'Hoje';
+  if(dStr === ontem.toLocaleDateString('pt-BR')) return 'Ontem';
+  return d.toLocaleDateString('pt-BR', { day:'2-digit', month:'long', year:'numeric' });
+}
+
+function renderHistorico(){
+  /* Atualiza o filtro de produtos */
+  const filtroSel = document.getElementById('filtro-produto-hist');
+  const atual = filtroSel.value;
+  filtroSel.innerHTML = '<option value="">Todos os produtos</option>' +
+    db.produtos.slice().sort((a,b) => a.nome.localeCompare(b.nome,'pt-BR'))
+      .map(p => `<option value="${p.id}">${esc(p.nome)}</option>`).join('');
+  if(atual && db.produtos.some(p => p.id === atual)) filtroSel.value = atual;
+
+  const filtroProd = filtroSel.value;
+
+  /* Filtra e ordena (mais recente primeiro) */
+  const movs = db.movimentos
+    .filter(m => m.tipo === histTipo)
+    .filter(m => !filtroProd || m.produtoId === filtroProd)
+    .sort((a,b) => new Date(b.data) - new Date(a.data));
+
+  /* Resumo */
+  document.getElementById('hist-total').textContent =
+    movs.reduce((s,m) => s + m.qtd, 0);
+  document.getElementById('hist-count').textContent = movs.length;
+
+  const lista = document.getElementById('lista-hist');
+
+  if(!movs.length){
+    const rotulo = histTipo === 'entrada' ? 'entrada' : 'saída';
+    lista.innerHTML = `<div class="card" style="text-align:center;color:var(--muted);line-height:1.6">
+      Nenhuma ${rotulo} registrada${filtroProd ? ' para este produto' : ''}.</div>`;
+    return;
+  }
+
+  /* Agrupa por dia */
+  const grupos = {};
+  movs.forEach(m => {
+    const key = new Date(m.data).toLocaleDateString('pt-BR');
+    (grupos[key] = grupos[key] || []).push(m);
+  });
+
+  lista.innerHTML = Object.keys(grupos).map(dia => {
+    const items = grupos[dia].map(m => {
+      const p = db.produtos.find(x => x.id === m.produtoId);
+      const nomeProd = p ? p.nome : '(produto excluído)';
+      const sinal = m.tipo === 'entrada' ? '+' : '−';
+      return `<div class="hist-card">
+        <div class="row">
+          <div class="nome">${esc(nomeProd)}</div>
+          <div class="qtd ${m.tipo}">${sinal}${m.qtd}</div>
+        </div>
+        <div class="meta">🕒 ${fmtData(m.data)}</div>
+        ${m.obs ? `<div class="obs">📝 ${esc(m.obs)}</div>` : ''}
+      </div>`;
+    }).join('');
+
+    const rotulo = rotuloDia(grupos[dia][0].data);
+    return `<div class="hist-head">${rotulo}</div>${items}`;
+  }).join('');
+}
+
+/* Alternância Entradas / Saídas */
+document.querySelectorAll('.seg-btn').forEach(b => {
+  b.addEventListener('click', () => {
+    histTipo = b.dataset.tipo;
+    document.querySelectorAll('.seg-btn').forEach(x => x.classList.toggle('active', x === b));
+    renderHistorico();
+  });
+});
+
+/* Filtro por produto */
+document.getElementById('filtro-produto-hist').addEventListener('change', renderHistorico);
+
 /* ================= MODAL PRODUTO ================= */
 const modal = document.getElementById('modal');
 function fecharModal(){ modal.classList.remove('show'); }
@@ -492,7 +620,6 @@ function abrirProduto(id){
 }
 
 /* ================= FORMULÁRIOS ================= */
-// Cadastro
 document.getElementById('form-produto').addEventListener('submit', e => {
   e.preventDefault();
   const f = e.target;
@@ -510,7 +637,6 @@ document.getElementById('form-produto').addEventListener('submit', e => {
   mostrarView('estoque');
 });
 
-// Entrada
 document.getElementById('form-entrada').addEventListener('submit', e => {
   e.preventDefault();
   const f = e.target;
@@ -523,7 +649,6 @@ document.getElementById('form-entrada').addEventListener('submit', e => {
   }catch(err){ toast(err.message, 'erro'); }
 });
 
-// Saída
 document.getElementById('form-saida').addEventListener('submit', e => {
   e.preventDefault();
   const f = e.target;
@@ -581,18 +706,18 @@ document.getElementById('file-import').addEventListener('change', e => {
   e.target.value = '';
 });
 
-/* ================= INICIALIZAÇÃO ================= */
-carregar();
-renderEstoque();
-renderSelects();
-atualizarDispSaida();
-</script>
-<script>
+/* ================= SERVICE WORKER (PWA) ================= */
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').catch(console.error);
   });
 }
+
+/* ================= INICIALIZAÇÃO ================= */
+carregar();
+renderEstoque();
+renderSelects();
+atualizarDispSaida();
 </script>
 </body>
 </html>
