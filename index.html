@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f766e">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Controle de Estoque</title>
+<style>
+  :root{
+    --bg:#f1f5f9; --card:#fff; --text:#0f172a; --muted:#64748b;
+    --primary:#0f766e; --primary-d:#115e59; --danger:#dc2626;
+    --border:#e2e8f0; --radius:14px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{
+    margin:0; font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    background:var(--bg); color:var(--text); font-size:16px;
+    padding-bottom:calc(84px + env(safe-area-inset-bottom));
+  }
+  header{
+    position:sticky; top:0; z-index:20; background:var(--primary); color:#fff;
+    padding:calc(12px + env(safe-area-inset-top)) 16px 12px;
+    box-shadow:0 2px 10px rgba(15,23,42,.18);
+  }
+  header h1{margin:0; font-size:17px; font-weight:600}
+  main{padding:14px; max-width:640px; margin:0 auto}
+
+  .view{display:none; animation:fade .15s ease}
+  .view.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+  .card{background:var(--card); border-radius:var(--radius); padding:14px;
+        box-shadow:0 1px 3px rgba(15,23,42,.08); margin-bottom:12px}
+
+  label{display:block; font-size:13px; font-weight:600; color:var(--muted); margin:12px 0 6px}
+  label:first-child{margin-top:0}
+  input,select{
+    width:100%; padding:13px 12px; font-size:16px; border:1px solid var(--border);
+    border-radius:11px; background:#fff; color:var(--text); outline:none;
+    font-family:inherit;
+  }
+  input:focus,select:focus{border-color:var(--primary); box-shadow:0 0 0 3px rgba(15,118,110,.12)}
+  input[type=search]{-webkit-appearance:none}
+
+  .btn{
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    width:100%; padding:14px; margin-top:16px; border:0; border-radius:12px;
+    font-size:16px; font-weight:600; font-family:inherit; cursor:pointer;
+    background:#e2e8f0; color:var(--text);
+  }
+  .btn.primary{background:var(--primary); color:#fff}
+  .btn.primary:active{background:var(--primary-d)}
+  .btn.danger{background:#fee2e2; color:#991b1b}
+  .btn:disabled{opacity:.45; cursor:not-allowed}
+  .btn.small{width:auto; padding:11px 14px; margin:0; font-size:14px; border-radius:11px; flex:1}
+
+  /* Resumo */
+  .resumo{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px}
+  .resumo > div{background:#fff; border:1px solid var(--border); border-radius:var(--radius); padding:12px 14px}
+  .resumo b{display:block; font-size:22px; color:var(--primary); line-height:1.2}
+  .resumo span{font-size:12px; color:var(--muted)}
+
+  /* Lista de produtos */
+  .item{
+    display:block; width:100%; text-align:left; background:#fff; border:1px solid var(--border);
+    border-radius:var(--radius); padding:12px 14px; margin-bottom:10px; cursor:pointer;
+    font-family:inherit; color:var(--text);
+  }
+  .item:active{background:#f8fafc}
+  .item-row{display:flex; justify-content:space-between; align-items:center; gap:10px}
+  .item-nome{font-weight:600; font-size:15px}
+  .item-qtd{font-weight:700; font-size:19px; color:var(--primary); white-space:nowrap; text-align:right}
+  .item-qtd small{display:block; font-size:11px; font-weight:600; color:var(--muted)}
+  .item-sub{font-size:12px; color:var(--muted); margin-top:4px}
+  .badge{display:inline-block; font-size:11px; font-weight:700; padding:3px 9px;
+         border-radius:999px; margin-top:7px}
+  .badge.baixo{background:#fef3c7; color:#92400e}
+  .badge.zero{background:#fee2e2; color:#991b1b}
+
+  /* Histórico */
+  .hist-item{display:flex; gap:10px; align-items:center; padding:9px 0; border-bottom:1px solid var(--border)}
+  .hist-item:last-child{border-bottom:0}
+  .tag{font-size:11px; font-weight:700; padding:4px 8px; border-radius:999px; white-space:nowrap}
+  .tag.entrada{background:#d1fae5; color:#065f46}
+  .tag.saida{background:#fee2e2; color:#991b1b}
+
+  /* Navegação inferior */
+  nav{
+    position:fixed; left:0; right:0; bottom:0; z-index:30;
+    display:grid; grid-template-columns:repeat(4,1fr);
+    background:#fff; border-top:1px solid var(--border);
+    padding-bottom:env(safe-area-inset-bottom);
+    box-shadow:0 -2px 12px rgba(15,23,42,.06);
+  }
+  nav button{
+    background:none; border:0; padding:9px 4px 8px; display:flex; flex-direction:column;
+    align-items:center; gap:2px; font-size:11px; font-weight:600; color:var(--muted);
+    font-family:inherit; cursor:pointer;
+  }
+  nav button .ico{font-size:20px; line-height:1}
+  nav button.active{color:var(--primary)}
+
+  /* Modal */
+  .modal{position:fixed; inset:0; z-index:50; display:none; background:rgba(15,23,42,.5);
+         align-items:flex-end; justify-content:center}
+  .modal.show{display:flex}
+  .modal-card{
+    width:100%; max-width:640px; max-height:88vh; overflow:auto; background:#fff;
+    border-radius:18px 18px 0 0; padding:16px 16px calc(20px + env(safe-area-inset-bottom));
+    animation:up .2s ease;
+  }
+  @keyframes up{from{transform:translateY(30px);opacity:.6}to{transform:none;opacity:1}}
+  .modal-head{display:flex; justify-content:space-between; align-items:center; gap:10px}
+  .modal-head h2{margin:0; font-size:17px}
+  .icon-btn{background:none; border:0; font-size:20px; color:var(--muted);
+            cursor:pointer; padding:6px 10px; border-radius:9px; font-family:inherit}
+  h3.sec{font-size:13px; text-transform:uppercase; letter-spacing:.4px;
+         color:var(--muted); margin:22px 0 6px}
+
+  /* Toast */
+  #toast{
+    position:fixed; left:50%; bottom:calc(96px + env(safe-area-inset-bottom));
+    transform:translate(-50%,20px); background:#0f172a; color:#fff;
+    padding:11px 18px; border-radius:12px; font-size:14px; font-weight:500;
+    opacity:0; pointer-events:none; transition:.25s; z-index:100;
+    max-width:88vw; text-align:center;
+  }
+  #toast.show{opacity:1; transform:translate(-50%,0)}
+  #toast.erro{background:#b91c1c}
+</style>
+</head>
+<body>
+
+<header><h1>📦 Controle de Estoque</h1></header>
+
+<main>
+
+  <!-- ============ ESTOQUE ============ -->
+  <section id="view-estoque" class="view active">
+    <div class="resumo">
+      <div><b id="res-produtos">0</b><span>Produtos cadastrados</span></div>
+      <div><b id="res-fardos">0</b><span>Fardos em estoque</span></div>
+    </div>
+
+    <input id="busca-estoque" type="search" placeholder="🔍 Buscar por nome ou código">
+
+    <div id="lista-estoque" style="margin-top:12px"></div>
+
+    <div style="display:flex; gap:10px; margin-top:6px">
+      <button class="btn small" id="btn-exportar">⬇️ Backup</button>
+      <button class="btn small" id="btn-importar">⬆️ Restaurar</button>
+      <input type="file" id="file-import" accept="application/json" hidden>
+    </div>
+  </section>
+
+  <!-- ============ CADASTRO ============ -->
+  <section id="view-cadastro" class="view">
+    <div class="card">
+      <form id="form-produto" autocomplete="off">
+        <label>Nome do produto *</label>
+        <input name="nome" required placeholder="Ex.: Arroz 5kg">
+
+        <label>Código / SKU (opcional)</label>
+        <input name="codigo" placeholder="Ex.: 1234">
+
+        <label>Quantidade inicial (fardos)</label>
+        <input name="qtd" type="number" min="0" step="1" inputmode="numeric" value="0">
+
+        <label>Estoque mínimo (alerta)</label>
+        <input name="minimo" type="number" min="0" step="1" inputmode="numeric" value="0">
+
+        <button type="submit" class="btn primary">Cadastrar produto</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- ============ ENTRADA ============ -->
+  <section id="view-entrada" class="view">
+    <div class="card">
+      <form id="form-entrada" autocomplete="off">
+        <label>Produto</label>
+        <select name="produtoId" required></select>
+
+        <label>Quantidade de fardos a entrar</label>
+        <input name="qtd" type="number" min="1" step="1" inputmode="numeric" required placeholder="Ex.: 10">
+
+        <label>Observação (opcional)</label>
+        <input name="obs" placeholder="Ex.: Nota fiscal 4455">
+
+        <button type="submit" class="btn primary">➕ Registrar entrada</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- ============ SAÍDA ============ -->
+  <section id="view-saida" class="view">
+    <div class="card">
+      <form id="form-saida" autocomplete="off">
+        <label>Produto</label>
+        <select name="produtoId" required></select>
+        <div id="disp-saida" style="font-size:13px;color:var(--muted);margin-top:8px"></div>
+
+        <label>Quantidade de fardos a retirar</label>
+        <input name="qtd" type="number" min="1" step="1" inputmode="numeric" required placeholder="Ex.: 3">
+
+        <label>Observação (opcional)</label>
+        <input name="obs" placeholder="Ex.: Venda balcão">
+
+        <button type="submit" class="btn primary">➖ Registrar saída</button>
+      </form>
+    </div>
+  </section>
+
+</main>
+
+<!-- ============ NAVEGAÇÃO ============ -->
+<nav>
+  <button data-view="estoque" class="active"><span class="ico">📋</span>Estoque</button>
+  <button data-view="entrada"><span class="ico">⬇️</span>Entrada</button>
+  <button data-view="saida"><span class="ico">⬆️</span>Saída</button>
+  <button data-view="cadastro"><span class="ico">➕</span>Produto</button>
+</nav>
+
+<!-- ============ MODAL DETALHE ============ -->
+<div id="modal" class="modal">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2 id="modal-titulo">Produto</h2>
+      <button class="icon-btn" id="modal-fechar">✕</button>
+    </div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ================= ESTADO / PERSISTÊNCIA ================= */
+const CHAVE = 'estoque_app_v1';
+let db = { produtos: [], movimentos: [] };
+
+function carregar(){
+  try{
+    const raw = localStorage.getItem(CHAVE);
+    if(raw){
+      const d = JSON.parse(raw);
+      if(d && Array.isArray(d.produtos)) db = { produtos: d.produtos, movimentos: Array.isArray(d.movimentos) ? d.movimentos : [] };
+    }
+  }catch(e){ console.warn('Falha ao carregar dados', e); }
+}
+function salvar(){ localStorage.setItem(CHAVE, JSON.stringify(db)); }
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmtData(iso){
+  const d = new Date(iso);
+  return d.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
+}
+
+/* ================= TOAST ================= */
+let toastTimer;
+function toast(msg, tipo='ok'){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show ' + tipo;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.className = '', 2600);
+}
+
+/* ================= NAVEGAÇÃO ================= */
+function mostrarView(nome){
+  document.querySelectorAll('.view').forEach(s => s.classList.toggle('active', s.id === 'view-' + nome));
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.view === nome));
+  if(nome === 'estoque') renderEstoque();
+  if(nome === 'entrada' || nome === 'saida'){ renderSelects(); atualizarDispSaida(); }
+  window.scrollTo(0,0);
+}
+document.querySelectorAll('nav button').forEach(b =>
+  b.addEventListener('click', () => mostrarView(b.dataset.view))
+);
+
+/* ================= REGRAS DE NEGÓCIO ================= */
+function addProduto({nome, codigo, qtd, minimo}){
+  const p = {
+    id: uid(),
+    nome: nome.trim(),
+    codigo: (codigo || '').trim(),
+    qtd: Math.max(0, parseInt(qtd) || 0),
+    minimo: Math.max(0, parseInt(minimo) || 0),
+    criadoEm: new Date().toISOString()
+  };
+  db.produtos.push(p);
+
+  if(p.qtd > 0){
+    db.movimentos.push({
+      id: uid(), produtoId: p.id, tipo: 'entrada',
+      qtd: p.qtd, obs: 'Estoque inicial', data: new Date().toISOString()
+    });
+  }
+  salvar();
+  return p;
+}
+
+function movimentar(produtoId, tipo, qtd, obs){
+  const p = db.produtos.find(x => x.id === produtoId);
+  if(!p) throw new Error('Selecione um produto válido.');
+
+  const n = parseInt(qtd);
+  if(!(n > 0)) throw new Error('Informe uma quantidade maior que zero.');
+
+  if(tipo === 'saida' && n > p.qtd)
+    throw new Error('Estoque insuficiente. Disponível: ' + p.qtd + ' fardo(s).');
+
+  p.qtd += (tipo === 'entrada' ? n : -n);
+
+  db.movimentos.push({
+    id: uid(), produtoId, tipo, qtd: n,
+    obs: (obs || '').trim(), data: new Date().toISOString()
+  });
+  salvar();
+}
+
+/* ================= RENDER: SELECTS ================= */
+function renderSelects(){
+  const selE = document.querySelector('#form-entrada select[name=produtoId]');
+  const selS = document.querySelector('#form-saida select[name=produtoId]');
+  const btnE = document.querySelector('#form-entrada button[type=submit]');
+  const btnS = document.querySelector('#form-saida button[type=submit]');
+
+  const temProdutos = db.produtos.length > 0;
+
+  const opcoes = db.produtos
+    .slice()
+    .sort((a,b) => a.nome.localeCompare(b.nome,'pt-BR'))
+    .map(p => `<option value="${p.id}">${esc(p.nome)} — ${p.qtd} em estoque</option>`)
+    .join('');
+
+  [selE, selS].forEach(sel => {
+    const atual = sel.value;
+    sel.innerHTML = temProdutos ? opcoes : '<option value="">Nenhum produto cadastrado</option>';
+    if(atual && db.produtos.some(p => p.id === atual)) sel.value = atual;
+  });
+
+  btnE.disabled = !temProdutos;
+  btnS.disabled = !temProdutos;
+}
+
+function atualizarDispSaida(){
+  const sel = document.querySelector('#form-saida select[name=produtoId]');
+  const hint = document.getElementById('disp-saida');
+  const p = db.produtos.find(x => x.id === sel.value);
+  hint.textContent = p ? `Disponível em estoque: ${p.qtd} fardo(s)` : '';
+}
+document.querySelector('#form-saida select[name=produtoId]')
+  .addEventListener('change', atualizarDispSaida);
+
+/* ================= RENDER: ESTOQUE ================= */
+function renderEstoque(){
+  const busca = (document.getElementById('busca-estoque').value || '').toLowerCase().trim();
+  const lista = document.getElementById('lista-estoque');
+
+  document.getElementById('res-produtos').textContent = db.produtos.length;
+  document.getElementById('res-fardos').textContent = db.produtos.reduce((s,p) => s + p.qtd, 0);
+
+  if(!db.produtos.length){
+    lista.innerHTML = `<div class="card" style="text-align:center;color:var(--muted);line-height:1.6">
+      Nenhum produto cadastrado ainda.<br>Toque em <b>Produto</b> para começar.</div>`;
+    return;
+  }
+
+  const prods = db.produtos
+    .filter(p => !busca || p.nome.toLowerCase().includes(busca) || (p.codigo||'').toLowerCase().includes(busca))
+    .sort((a,b) => a.nome.localeCompare(b.nome,'pt-BR'));
+
+  if(!prods.length){
+    lista.innerHTML = `<div class="card" style="text-align:center;color:var(--muted)">
+      Nada encontrado para "${esc(busca)}".</div>`;
+    return;
+  }
+
+  lista.innerHTML = prods.map(p => {
+    const badge = p.qtd === 0
+      ? '<span class="badge zero">Sem estoque</span>'
+      : (p.qtd <= p.minimo ? '<span class="badge baixo">Estoque baixo</span>' : '');
+    const sub = [
+      p.codigo ? 'Cód: ' + esc(p.codigo) : null,
+      p.minimo ? 'Mín: ' + p.minimo : null
+    ].filter(Boolean).join(' · ');
+
+    return `<button class="item" data-id="${p.id}">
+      <div class="item-row">
+        <div>
+          <div class="item-nome">${esc(p.nome)}</div>
+          ${sub ? `<div class="item-sub">${sub}</div>` : ''}
+        </div>
+        <div class="item-qtd">${p.qtd}<small>fardos</small></div>
+      </div>
+      ${badge}
+    </button>`;
+  }).join('');
+}
+
+document.getElementById('busca-estoque').addEventListener('input', renderEstoque);
+
+/* ================= MODAL PRODUTO ================= */
+const modal = document.getElementById('modal');
+function fecharModal(){ modal.classList.remove('show'); }
+
+document.getElementById('modal-fechar').addEventListener('click', fecharModal);
+modal.addEventListener('click', e => { if(e.target === modal) fecharModal(); });
+
+document.getElementById('lista-estoque').addEventListener('click', e => {
+  const btn = e.target.closest('.item');
+  if(btn) abrirProduto(btn.dataset.id);
+});
+
+function abrirProduto(id){
+  const p = db.produtos.find(x => x.id === id);
+  if(!p) return;
+
+  const movs = db.movimentos
+    .filter(m => m.produtoId === id)
+    .sort((a,b) => new Date(b.data) - new Date(a.data))
+    .slice(0, 40);
+
+  const hist = movs.length
+    ? movs.map(m => `<div class="hist-item">
+        <span class="tag ${m.tipo}">${m.tipo === 'entrada' ? '⬇️ Entrada' : '⬆️ Saída'}</span>
+        <div style="flex:1">
+          <div style="font-weight:600">${m.tipo === 'entrada' ? '+' : '−'}${m.qtd} fardo(s)</div>
+          <div style="font-size:12px;color:var(--muted)">${fmtData(m.data)}${m.obs ? ' · ' + esc(m.obs) : ''}</div>
+        </div>
+      </div>`).join('')
+    : '<div style="color:var(--muted);font-size:14px">Nenhuma movimentação registrada.</div>';
+
+  document.getElementById('modal-titulo').textContent = p.nome;
+  document.getElementById('modal-body').innerHTML = `
+    <div class="resumo" style="margin-top:14px">
+      <div><b>${p.qtd}</b><span>Fardos em estoque</span></div>
+      <div><b>${db.movimentos.filter(m => m.produtoId === id).length}</b><span>Movimentações</span></div>
+    </div>
+
+    <label>Nome</label>
+    <input id="ed-nome" value="${esc(p.nome)}">
+    <label>Código / SKU</label>
+    <input id="ed-codigo" value="${esc(p.codigo || '')}">
+    <label>Estoque mínimo (alerta)</label>
+    <input id="ed-minimo" type="number" min="0" step="1" inputmode="numeric" value="${p.minimo}">
+
+    <button class="btn primary" id="btn-salvar-produto">Salvar alterações</button>
+    <button class="btn danger" id="btn-excluir-produto">Excluir produto</button>
+
+    <h3 class="sec">Histórico de movimentações</h3>
+    ${hist}
+  `;
+
+  document.getElementById('btn-salvar-produto').addEventListener('click', () => {
+    const nome = document.getElementById('ed-nome').value.trim();
+    if(!nome) return toast('Informe o nome do produto.', 'erro');
+
+    const duplicado = db.produtos.some(x => x.id !== p.id && x.nome.toLowerCase() === nome.toLowerCase());
+    if(duplicado) return toast('Já existe um produto com esse nome.', 'erro');
+
+    p.nome = nome;
+    p.codigo = document.getElementById('ed-codigo').value.trim();
+    p.minimo = Math.max(0, parseInt(document.getElementById('ed-minimo').value) || 0);
+
+    salvar();
+    renderEstoque();
+    renderSelects();
+    fecharModal();
+    toast('Produto atualizado!');
+  });
+
+  document.getElementById('btn-excluir-produto').addEventListener('click', () => {
+    if(!confirm(`Excluir "${p.nome}" e todo o seu histórico?`)) return;
+
+    db.produtos = db.produtos.filter(x => x.id !== p.id);
+    db.movimentos = db.movimentos.filter(m => m.produtoId !== p.id);
+
+    salvar();
+    renderEstoque();
+    renderSelects();
+    fecharModal();
+    toast('Produto excluído.');
+  });
+
+  modal.classList.add('show');
+}
+
+/* ================= FORMULÁRIOS ================= */
+// Cadastro
+document.getElementById('form-produto').addEventListener('submit', e => {
+  e.preventDefault();
+  const f = e.target;
+  const nome = f.nome.value.trim();
+
+  if(!nome) return toast('Informe o nome do produto.', 'erro');
+  if(db.produtos.some(p => p.nome.toLowerCase() === nome.toLowerCase()))
+    return toast('Já existe um produto com esse nome.', 'erro');
+
+  addProduto({ nome, codigo: f.codigo.value, qtd: f.qtd.value, minimo: f.minimo.value });
+
+  f.reset();
+  renderSelects();
+  toast('Produto cadastrado com sucesso!');
+  mostrarView('estoque');
+});
+
+// Entrada
+document.getElementById('form-entrada').addEventListener('submit', e => {
+  e.preventDefault();
+  const f = e.target;
+  try{
+    movimentar(f.produtoId.value, 'entrada', f.qtd.value, f.obs.value);
+    f.reset();
+    renderSelects();
+    renderEstoque();
+    toast('Entrada registrada!');
+  }catch(err){ toast(err.message, 'erro'); }
+});
+
+// Saída
+document.getElementById('form-saida').addEventListener('submit', e => {
+  e.preventDefault();
+  const f = e.target;
+  try{
+    movimentar(f.produtoId.value, 'saida', f.qtd.value, f.obs.value);
+    f.reset();
+    renderSelects();
+    atualizarDispSaida();
+    renderEstoque();
+    toast('Saída registrada!');
+  }catch(err){ toast(err.message, 'erro'); }
+});
+
+/* ================= BACKUP / RESTAURAÇÃO ================= */
+document.getElementById('btn-exportar').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'estoque-' + new Date().toISOString().slice(0,10) + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+  toast('Backup gerado!');
+});
+
+document.getElementById('btn-importar').addEventListener('click', () =>
+  document.getElementById('file-import').click()
+);
+
+document.getElementById('file-import').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if(!file) return;
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const dados = JSON.parse(reader.result);
+      if(!dados || !Array.isArray(dados.produtos)) throw new Error('inválido');
+      if(!confirm('Isso substituirá TODOS os dados atuais. Deseja continuar?')) return;
+
+      db = {
+        produtos: dados.produtos,
+        movimentos: Array.isArray(dados.movimentos) ? dados.movimentos : []
+      };
+      salvar();
+      renderEstoque();
+      renderSelects();
+      toast('Backup restaurado com sucesso!');
+    }catch(err){
+      toast('Arquivo inválido.', 'erro');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+/* ================= INICIALIZAÇÃO ================= */
+carregar();
+renderEstoque();
+renderSelects();
+atualizarDispSaida();
+</script>
+</body>
+</html>
